@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Mini Jump Game</title>
+<style>
+body {
+  margin: 0;
+  overflow: hidden;
+  background: black;
+}
+canvas {
+  display: block;
+  margin: 0 auto;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="game" width="400" height="700"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+// 🖼️ ассеты
+const bg = new Image();
+const playerImg = new Image();
+const platformImg = new Image();
+
+bg.src = "assets/bg.jpg";
+playerImg.src = "assets/player.png";
+platformImg.src = "assets/platform.png";
+
+// 🧍 игрок
+let player = {
+  x: 180,
+  y: 500,
+  w: 60,
+  h: 60,
+  vy: 0,
+  jump: -11
+};
+
+// 🧱 платформы
+let platforms = [];
+for (let i = 0; i < 8; i++) {
+  platforms.push({
+    x: Math.random() * 340,
+    y: i * 90,
+    w: 80,
+    h: 20
+  });
+}
+
+let gravity = 0.45;
+let keys = {};
+
+document.addEventListener("keydown", e => keys[e.code] = true);
+document.addEventListener("keyup", e => keys[e.code] = false);
+
+function update() {
+  // движение
+  if (keys["ArrowLeft"]) player.x -= 6;
+  if (keys["ArrowRight"]) player.x += 6;
+
+  // телепорт по краям
+  if (player.x > 400) player.x = -60;
+  if (player.x < -60) player.x = 400;
+
+  // физика
+  player.vy += gravity;
+  player.y += player.vy;
+
+  // столкновения
+  for (let p of platforms) {
+    if (
+      player.vy > 0 &&
+      player.x < p.x + p.w &&
+      player.x + player.w > p.x &&
+      player.y + player.h > p.y &&
+      player.y + player.h < p.y + p.h
+    ) {
+      player.vy = player.jump;
+    }
+  }
+
+  // камера
+  if (player.y < 300) {
+    platforms.forEach(p => p.y += 5);
+    player.y += 5;
+  }
+
+  // респавн
+  for (let p of platforms) {
+    if (p.y > 700) {
+      p.y = 0;
+      p.x = Math.random() * 340;
+    }
+  }
+}
+
+function draw() {
+  // фон
+  if (bg.complete && bg.naturalWidth) {
+    ctx.drawImage(bg, 0, 0, 400, 700);
+  } else {
+    ctx.fillStyle = "#111";
+    ctx.fillRect(0, 0, 400, 700);
+  }
+
+  // платформы
+  for (let p of platforms) {
+    if (platformImg.complete && platformImg.naturalWidth) {
+      ctx.drawImage(platformImg, p.x, p.y, p.w, p.h);
+    } else {
+      ctx.fillStyle = "lime";
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+    }
+  }
+
+  // игрок
+  if (playerImg.complete && playerImg.naturalWidth) {
+    ctx.drawImage(playerImg, player.x, player.y, player.w, player.h);
+  } else {
+    ctx.fillStyle = "white";
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+  }
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+
+</body>
+</html>

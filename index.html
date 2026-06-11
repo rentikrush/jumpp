@@ -52,19 +52,18 @@ const player = {
 
 const gravity = 0.45;
 const jumpPower = -16;
+const bonusJump = -22;
 
 let currentStep = 1;
 let gameWon = false;
 
 const keys = {};
 
-document.addEventListener("keydown", e=>{
-    keys[e.code] = true;
-});
+// частицы
+let particles = [];
 
-document.addEventListener("keyup", e=>{
-    keys[e.code] = false;
-});
+document.addEventListener("keydown", e => keys[e.code] = true);
+document.addEventListener("keyup", e => keys[e.code] = false);
 
 // платформы
 const platforms = [];
@@ -73,53 +72,69 @@ let lastX = 160;
 
 for(let i=0;i<100;i++){
 
-    let move = Math.random()*80 - 40;
+    let move = Math.random()*140 - 70;
     lastX += move;
 
     if(lastX < 20) lastX = 20;
     if(lastX > 300) lastX = 300;
 
+    let type = "normal";
+
+    if(Math.random() < 0.15) type = "break";   // ломается
+    if(Math.random() < 0.08) type = "bonus";   // супер прыжок
+
     platforms.push({
         x:lastX,
-        y:650 - i*110,
+        y:650 - i*140,
         w:80,
         h:20,
         touched:false,
-        number:i+1
+        number:i+1,
+        type:type
     });
 }
 
-platforms[0].touched = true;
+platforms[0].type = "normal";
 
 let cameraY = 0;
+
+// частицы
+function spawnParticles(x,y){
+    for(let i=0;i<6;i++){
+        particles.push({
+            x:x+40,
+            y:y,
+            vx:(Math.random()-0.5)*4,
+            vy:(Math.random()-0.5)*4,
+            life:20
+        });
+    }
+}
+
+function updateParticles(){
+    particles.forEach(p=>{
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+    });
+
+    particles = particles.filter(p=>p.life>0);
+}
 
 function update(){
 
     if(gameWon) return;
 
-    // движение
-    if(keys["ArrowLeft"]){
-        player.x -= 6;
-    }
-
-    if(keys["ArrowRight"]){
-        player.x += 6;
-    }
+    if(keys["ArrowLeft"]) player.x -= 6;
+    if(keys["ArrowRight"]) player.x += 6;
 
     // телепорт
-    if(player.x > canvas.width){
-        player.x = -player.w;
-    }
+    if(player.x > canvas.width) player.x = -player.w;
+    if(player.x + player.w < 0) player.x = canvas.width;
 
-    if(player.x + player.w < 0){
-        player.x = canvas.width;
-    }
-
-    // физика
     player.vy += gravity;
     player.y += player.vy;
 
-    // столкновения
     for(const p of platforms){
 
         if(
@@ -130,16 +145,26 @@ function update(){
             player.y + player.h < p.y + p.h
         ){
 
-            player.vy = jumpPower;
+            // эффект
+            spawnParticles(p.x, p.y);
+
+            // прыжок
+            if(p.type === "bonus"){
+                player.vy = bonusJump;
+            }else{
+                player.vy = jumpPower;
+            }
+
+            // ломаемая платформа
+            if(p.type === "break"){
+                p.y = 9999; // убираем
+            }
 
             if(!p.touched){
-
                 p.touched = true;
-
                 if(p.number > currentStep){
                     currentStep = p.number;
                 }
-
                 if(currentStep >= 100){
                     gameWon = true;
                 }
@@ -147,18 +172,18 @@ function update(){
         }
     }
 
-    // камера
     if(player.y - cameraY < 250){
         cameraY = player.y - 250;
     }
+
+    updateParticles();
 }
 
 function draw(){
 
-    // фон
-    if(bg.complete && bg.naturalWidth > 0){
+    if(bg.complete && bg.naturalWidth){
         ctx.drawImage(bg,0,0,canvas.width,canvas.height);
-    }else{
+    } else {
         ctx.fillStyle = "#111";
         ctx.fillRect(0,0,canvas.width,canvas.height);
     }
@@ -168,130 +193,62 @@ function draw(){
 
         const sy = p.y - cameraY;
 
-        if(sy < -50 || sy > canvas.height + 50){
-            continue;
-        }
+        if(sy < -100 || sy > canvas.height + 100) continue;
 
-        if(platformImg.complete && platformImg.naturalWidth > 0){
-
-            ctx.drawImage(
-                platformImg,
-                p.x,
-                sy,
-                p.w,
-                p.h
-            );
-
-        }else{
-
+        if(p.type === "break"){
+            ctx.fillStyle = "#ff5555";
+        } else if(p.type === "bonus"){
+            ctx.fillStyle = "#ffd700";
+        } else {
             ctx.fillStyle = "lime";
-            ctx.fillRect(
-                p.x,
-                sy,
-                p.w,
-                p.h
-            );
         }
+
+        ctx.fillRect(p.x, sy, p.w, p.h);
     }
+
+    // частицы
+    particles.forEach(p=>{
+        ctx.fillStyle = "white";
+        ctx.fillRect(p.x, p.y - cameraY, 3, 3);
+    });
 
     // игрок
-    const playerScreenY = player.y - cameraY;
+    const py = player.y - cameraY;
 
-    if(playerImg.complete && playerImg.naturalWidth > 0){
-
-        ctx.drawImage(
-            playerImg,
-            player.x,
-            playerScreenY,
-            player.w,
-            player.h
-        );
-
-    }else{
-
+    if(playerImg.complete && playerImg.naturalWidth){
+        ctx.drawImage(playerImg, player.x, py, player.w, player.h);
+    } else {
         ctx.fillStyle = "white";
-        ctx.fillRect(
-            player.x,
-            playerScreenY,
-            player.w,
-            player.h
-        );
+        ctx.fillRect(player.x, py, player.w, player.h);
     }
 
-    // счётчик
+    // UI
     ctx.fillStyle = "white";
     ctx.font = "24px Fredoka";
-    ctx.fillText(
-        "Escalón: " + currentStep + "/100",
-        10,
-        35
-    );
+    ctx.fillText(`Escalón: ${currentStep}/100`, 10, 35);
 
     // победа
     if(gameWon){
 
-        ctx.fillStyle = "rgba(0,0,0,0.8)";
-        ctx.fillRect(
-            0,
-            0,
-            canvas.width,
-            canvas.height
-        );
+        ctx.fillStyle = "rgba(0,0,0,0.85)";
+        ctx.fillRect(0,0,canvas.width,canvas.height);
 
         ctx.textAlign = "center";
-
-        ctx.strokeStyle = "#000";
-        ctx.lineWidth = 6;
-
         ctx.fillStyle = "#ff77aa";
         ctx.font = "42px Fredoka";
 
-        ctx.strokeText(
-            "Sos la mejor",
-            canvas.width/2,
-            280
-        );
+        ctx.fillText("Sos la mejor princesa", 200, 300);
+        ctx.fillText("❤️", 200, 360);
 
-        ctx.fillText(
-            "Sos la mejor",
-            canvas.width/2,
-            280
-        );
-
-        ctx.strokeText(
-            "princesa ❤️",
-            canvas.width/2,
-            340
-        );
-
-        ctx.fillText(
-            "princesa ❤️",
-            canvas.width/2,
-            340
-        );
-
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "26px Fredoka";
-
-        ctx.strokeText(
-            "¡Felicitaciones!",
-            canvas.width/2,
-            420
-        );
-
-        ctx.fillText(
-            "¡Felicitaciones!",
-            canvas.width/2,
-            420
-        );
+        ctx.fillStyle = "white";
+        ctx.font = "24px Fredoka";
+        ctx.fillText("¡Felicitaciones!", 200, 430);
     }
 }
 
 function loop(){
-
     update();
     draw();
-
     requestAnimationFrame(loop);
 }
 

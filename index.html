@@ -1,30 +1,8 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<title>Mini Jump Game</title>
-<style>
-body {
-  margin: 0;
-  overflow: hidden;
-  background: black;
-}
-canvas {
-  display: block;
-  margin: 0 auto;
-}
-</style>
-</head>
-
-<body>
-
-<canvas id="game" width="400" height="700"></canvas>
-
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-// 🖼️ ассеты
+// Картинки
 const bg = new Image();
 const playerImg = new Image();
 const platformImg = new Image();
@@ -33,110 +11,236 @@ bg.src = "assets/bg.jpg";
 playerImg.src = "assets/player.png";
 platformImg.src = "assets/platform.png";
 
-// 🧍 игрок
+// Игрок
 let player = {
-  x: 180,
-  y: 500,
-  w: 60,
-  h: 60,
-  vy: 0,
-  jump: -11
+    x: 180,
+    y: 600,
+    w: 60,
+    h: 60,
+    vy: 0,
+    jump: -12
 };
-
-// 🧱 платформы
-let platforms = [];
-for (let i = 0; i < 8; i++) {
-  platforms.push({
-    x: Math.random() * 340,
-    y: i * 90,
-    w: 80,
-    h: 20
-  });
-}
 
 let gravity = 0.45;
 let keys = {};
 
-document.addEventListener("keydown", e => keys[e.code] = true);
-document.addEventListener("keyup", e => keys[e.code] = false);
+let currentStep = 1;
+let gameWon = false;
+
+// Управление
+document.addEventListener("keydown", e => {
+    keys[e.code] = true;
+});
+
+document.addEventListener("keyup", e => {
+    keys[e.code] = false;
+});
+
+// 100 платформ
+let platforms = [];
+
+let lastX = 180;
+
+for (let i = 0; i < 100; i++) {
+
+    let offset = Math.random() * 100 - 50;
+
+    lastX += offset;
+
+    if (lastX < 20) lastX = 20;
+    if (lastX > 300) lastX = 300;
+
+    platforms.push({
+        x: lastX,
+        y: 650 - (i * 80),
+        w: 80,
+        h: 20,
+        index: i + 1,
+        touched: false
+    });
+}
+
+// Первая платформа под ногами
+platforms[0].touched = true;
+
+let cameraY = 0;
 
 function update() {
-  // движение
-  if (keys["ArrowLeft"]) player.x -= 6;
-  if (keys["ArrowRight"]) player.x += 6;
 
-  // телепорт по краям
-  if (player.x > 400) player.x = -60;
-  if (player.x < -60) player.x = 400;
+    if (gameWon) return;
 
-  // физика
-  player.vy += gravity;
-  player.y += player.vy;
+    // Движение
+    if (keys["ArrowLeft"]) player.x -= 6;
+    if (keys["ArrowRight"]) player.x += 6;
 
-  // столкновения
-  for (let p of platforms) {
-    if (
-      player.vy > 0 &&
-      player.x < p.x + p.w &&
-      player.x + player.w > p.x &&
-      player.y + player.h > p.y &&
-      player.y + player.h < p.y + p.h
-    ) {
-      player.vy = player.jump;
+    // Телепорт через края
+    if (player.x > canvas.width)
+        player.x = -player.w;
+
+    if (player.x + player.w < 0)
+        player.x = canvas.width;
+
+    // Физика
+    player.vy += gravity;
+    player.y += player.vy;
+
+    // Прыжки
+    for (let p of platforms) {
+
+        if (
+            player.vy > 0 &&
+            player.x < p.x + p.w &&
+            player.x + player.w > p.x &&
+            player.y + player.h > p.y &&
+            player.y + player.h < p.y + p.h
+        ) {
+
+            player.vy = player.jump;
+
+            if (!p.touched) {
+
+                p.touched = true;
+
+                if (p.index > currentStep) {
+                    currentStep = p.index;
+                }
+
+                if (currentStep >= 100) {
+                    gameWon = true;
+                }
+            }
+        }
     }
-  }
 
-  // камера
-  if (player.y < 300) {
-    platforms.forEach(p => p.y += 5);
-    player.y += 5;
-  }
-
-  // респавн
-  for (let p of platforms) {
-    if (p.y > 700) {
-      p.y = 0;
-      p.x = Math.random() * 340;
+    // Камера
+    if (player.y - cameraY < 250) {
+        cameraY = player.y - 250;
     }
-  }
 }
 
 function draw() {
-  // фон
-  if (bg.complete && bg.naturalWidth) {
-    ctx.drawImage(bg, 0, 0, 400, 700);
-  } else {
-    ctx.fillStyle = "#111";
-    ctx.fillRect(0, 0, 400, 700);
-  }
 
-  // платформы
-  for (let p of platforms) {
-    if (platformImg.complete && platformImg.naturalWidth) {
-      ctx.drawImage(platformImg, p.x, p.y, p.w, p.h);
+    // Фон
+    if (bg.complete && bg.naturalWidth) {
+        ctx.drawImage(bg, 0, 0, canvas.width, canvas.height);
     } else {
-      ctx.fillStyle = "lime";
-      ctx.fillRect(p.x, p.y, p.w, p.h);
+        ctx.fillStyle = "#111";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
-  }
 
-  // игрок
-  if (playerImg.complete && playerImg.naturalWidth) {
-    ctx.drawImage(playerImg, player.x, player.y, player.w, player.h);
-  } else {
+    // Платформы
+    for (let p of platforms) {
+
+        let screenY = p.y - cameraY;
+
+        if (screenY < -100 || screenY > canvas.height + 100)
+            continue;
+
+        if (platformImg.complete && platformImg.naturalWidth) {
+
+            ctx.drawImage(
+                platformImg,
+                p.x,
+                screenY,
+                p.w,
+                p.h
+            );
+
+        } else {
+
+            ctx.fillStyle = "lime";
+            ctx.fillRect(
+                p.x,
+                screenY,
+                p.w,
+                p.h
+            );
+        }
+    }
+
+    // Игрок
+    let playerScreenY = player.y - cameraY;
+
+    if (playerImg.complete && playerImg.naturalWidth) {
+
+        ctx.drawImage(
+            playerImg,
+            player.x,
+            playerScreenY,
+            player.w,
+            player.h
+        );
+
+    } else {
+
+        ctx.fillStyle = "white";
+        ctx.fillRect(
+            player.x,
+            playerScreenY,
+            player.w,
+            player.h
+        );
+    }
+
+    // Счётчик
     ctx.fillStyle = "white";
-    ctx.fillRect(player.x, player.y, player.w, player.h);
-  }
+    ctx.font = "24px Arial";
+    ctx.fillText(
+        `Ступенька: ${currentStep}/100`,
+        10,
+        35
+    );
+
+    // Победа
+    if (gameWon) {
+
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+        ctx.fillStyle = "#ff77aa";
+        ctx.font = "40px Arial";
+        ctx.textAlign = "center";
+
+        ctx.fillText(
+            "❤️",
+            canvas.width / 2,
+            260
+        );
+
+        ctx.fillText(
+            "Ты лучшая",
+            canvas.width / 2,
+            330
+        );
+
+        ctx.fillText(
+            "принцесса ❤️",
+            canvas.width / 2,
+            390
+        );
+
+        ctx.font = "22px Arial";
+
+        ctx.fillText(
+            "Поздравляю!",
+            canvas.width / 2,
+            460
+        );
+    }
 }
 
 function loop() {
-  update();
-  draw();
-  requestAnimationFrame(loop);
+
+    update();
+    draw();
+
+    requestAnimationFrame(loop);
 }
 
 loop();
 </script>
-
-</body>
-</html>

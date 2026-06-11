@@ -56,26 +56,30 @@ const jumpPower = -16;
 const bonusJump = -22;
 
 let currentStep = 1;
+
 let gameWon = false;
+let gameOver = false;
 
-// keyboard
+// controls
 const keys = {};
-
-// touch
 let touchLeft = false;
 let touchRight = false;
 
-// controls
+// particles
+let particles = [];
+
+// restart helper
+let lastX = 160;
+
+// input
 document.addEventListener("keydown", e => keys[e.code] = true);
 document.addEventListener("keyup", e => keys[e.code] = false);
 
+// touch controls
 canvas.addEventListener("touchstart", (e) => {
     const x = e.touches[0].clientX;
-    if (x < window.innerWidth / 2) {
-        touchLeft = true;
-    } else {
-        touchRight = true;
-    }
+    if (x < window.innerWidth / 2) touchLeft = true;
+    else touchRight = true;
 });
 
 canvas.addEventListener("touchend", () => {
@@ -83,9 +87,59 @@ canvas.addEventListener("touchend", () => {
     touchRight = false;
 });
 
-// particles
-let particles = [];
+// click restart button
+canvas.addEventListener("click", (e)=>{
 
+    if(!gameOver) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if(x > 120 && x < 280 && y > 380 && y < 430){
+        restartGame();
+    }
+});
+
+// platforms
+let platforms = [];
+
+function createPlatforms(){
+
+    platforms = [];
+    lastX = 160;
+
+    for(let i=0;i<100;i++){
+
+        let move = Math.random()*140 - 70;
+        lastX += move;
+
+        if(lastX < 20) lastX = 20;
+        if(lastX > 300) lastX = 300;
+
+        let type = "normal";
+        if(Math.random() < 0.15) type = "break";
+        if(Math.random() < 0.08) type = "bonus";
+
+        platforms.push({
+            x:lastX,
+            y:650 - i*140,
+            w:80,
+            h:20,
+            number:i+1,
+            touched:false,
+            type:type
+        });
+    }
+
+    platforms[0].type = "normal";
+}
+
+createPlatforms();
+
+let cameraY = 0;
+
+// particles
 function spawnParticles(x,y){
     for(let i=0;i<6;i++){
         particles.push({
@@ -107,56 +161,35 @@ function updateParticles(){
     particles = particles.filter(p=>p.life>0);
 }
 
-// platforms
-const platforms = [];
+// restart
+function restartGame(){
 
-let lastX = 160;
+    player.x = 180;
+    player.y = 600;
+    player.vy = 0;
 
-for(let i=0;i<100;i++){
+    currentStep = 1;
+    cameraY = 0;
 
-    let move = Math.random()*140 - 70;
-    lastX += move;
+    gameWon = false;
+    gameOver = false;
 
-    if(lastX < 20) lastX = 20;
-    if(lastX > 300) lastX = 300;
+    particles = [];
 
-    let type = "normal";
-    if(Math.random() < 0.15) type = "break";
-    if(Math.random() < 0.08) type = "bonus";
-
-    platforms.push({
-        x:lastX,
-        y:650 - i*140,
-        w:80,
-        h:20,
-        number:i+1,
-        touched:false,
-        type:type
-    });
+    createPlatforms();
 }
-
-platforms[0].type = "normal";
-
-let cameraY = 0;
 
 // update
 function update(){
 
-    if(gameWon) return;
+    if(gameOver || gameWon) return;
 
-    if(keys["ArrowLeft"] || touchLeft){
-        player.x -= 6;
-    }
+    if(keys["ArrowLeft"] || touchLeft) player.x -= 6;
+    if(keys["ArrowRight"] || touchRight) player.x += 6;
 
-    if(keys["ArrowRight"] || touchRight){
-        player.x += 6;
-    }
-
-    // wrap
     if(player.x > canvas.width) player.x = -player.w;
     if(player.x + player.w < 0) player.x = canvas.width;
 
-    // physics
     player.vy += gravity;
     player.y += player.vy;
 
@@ -171,7 +204,7 @@ function update(){
 
         if(hit){
 
-            spawnParticles(p.x, p.y);
+            spawnParticles(p.x,p.y);
 
             if(p.type === "bonus") player.vy = bonusJump;
             else player.vy = jumpPower;
@@ -191,6 +224,11 @@ function update(){
     }
 
     updateParticles();
+
+    // lose condition
+    if(player.y - cameraY > canvas.height + 200){
+        gameOver = true;
+    }
 }
 
 // draw
@@ -198,11 +236,12 @@ function draw(){
 
     if(bg.complete && bg.naturalWidth){
         ctx.drawImage(bg,0,0,canvas.width,canvas.height);
-    }else{
-        ctx.fillStyle="#111";
+    } else {
+        ctx.fillStyle = "#111";
         ctx.fillRect(0,0,canvas.width,canvas.height);
     }
 
+    // platforms
     for(const p of platforms){
 
         const y = p.y - cameraY;
@@ -215,24 +254,28 @@ function draw(){
         ctx.fillRect(p.x,y,p.w,p.h);
     }
 
+    // particles
     particles.forEach(p=>{
         ctx.fillStyle="white";
         ctx.fillRect(p.x,p.y-cameraY,3,3);
     });
 
+    // player
     const py = player.y - cameraY;
 
     if(playerImg.complete){
         ctx.drawImage(playerImg,player.x,py,player.w,player.h);
-    }else{
+    } else {
         ctx.fillStyle="white";
         ctx.fillRect(player.x,py,player.w,player.h);
     }
 
+    // UI
     ctx.fillStyle="white";
     ctx.font="24px Fredoka";
     ctx.fillText(`Escalón: ${currentStep}/100`,10,35);
 
+    // WIN
     if(gameWon){
 
         ctx.fillStyle="rgba(0,0,0,0.85)";
@@ -248,6 +291,29 @@ function draw(){
         ctx.fillStyle="white";
         ctx.font="24px Fredoka";
         ctx.fillText("¡Felicitaciones!",200,430);
+    }
+
+    // GAME OVER
+    if(gameOver){
+
+        ctx.fillStyle="rgba(0,0,0,0.85)";
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+
+        ctx.textAlign="center";
+
+        ctx.fillStyle="white";
+        ctx.font="28px Fredoka";
+
+        ctx.fillText("No pasa nada 😌",200,280);
+        ctx.fillText("Intentá otra vez",200,330);
+
+        // button
+        ctx.fillStyle="#ff77aa";
+        ctx.fillRect(120,380,160,50);
+
+        ctx.fillStyle="#000";
+        ctx.font="20px Fredoka";
+        ctx.fillText("Jugar otra vez",200,412);
     }
 }
 

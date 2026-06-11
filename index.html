@@ -182,10 +182,10 @@ function restartGame(){
 // update
 function update(){
 
-    if(gameOver  gameWon) return;
+    if(gameOver || gameWon) return;
 
-    if(keys["ArrowLeft"]  touchLeft) player.x -= 6;
-    if(keys["ArrowRight"]  touchRight) player.x += 6;
+    if(keys["ArrowLeft"] || touchLeft) player.x -= 6;
+    if(keys["ArrowRight"] || touchRight) player.x += 6;
 
     if(player.x > canvas.width) player.x = -player.w;
     if(player.x + player.w < 0) player.x = canvas.width;
@@ -245,7 +245,7 @@ function draw(){
     for(const p of platforms){
 
         const y = p.y - cameraY;
-        if(y < -100  y > canvas.height+100) continue;
+        if(y < -100 || y > canvas.height+100) continue;
 
         if(p.type==="break") ctx.fillStyle="#ff5555";
         else if(p.type==="bonus") ctx.fillStyle="#ffd700";
@@ -273,7 +273,7 @@ function draw(){
     // UI
     ctx.fillStyle="white";
     ctx.font="24px Fredoka";
-    ctx.fillText(Escalón: ${currentStep}/100,10,35);
+    ctx.fillText(`Escalón: ${currentStep}/100`,10,35);
 
     // WIN
     if(gameWon){

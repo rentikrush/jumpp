@@ -14,6 +14,7 @@ body{
     margin:0;
     overflow:hidden;
     background:black;
+    touch-action:none;
 }
 
 canvas{
@@ -31,7 +32,7 @@ canvas{
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-// картинки
+// assets
 const bg = new Image();
 bg.src = "assets/bg.jpg";
 
@@ -41,7 +42,7 @@ playerImg.src = "assets/player.png";
 const platformImg = new Image();
 platformImg.src = "assets/platform.png";
 
-// игрок
+// player
 const player = {
     x:180,
     y:600,
@@ -57,48 +58,34 @@ const bonusJump = -22;
 let currentStep = 1;
 let gameWon = false;
 
+// keyboard
 const keys = {};
 
-// частицы
-let particles = [];
+// touch
+let touchLeft = false;
+let touchRight = false;
 
+// controls
 document.addEventListener("keydown", e => keys[e.code] = true);
 document.addEventListener("keyup", e => keys[e.code] = false);
 
-// платформы
-const platforms = [];
+canvas.addEventListener("touchstart", (e) => {
+    const x = e.touches[0].clientX;
+    if (x < window.innerWidth / 2) {
+        touchLeft = true;
+    } else {
+        touchRight = true;
+    }
+});
 
-let lastX = 160;
+canvas.addEventListener("touchend", () => {
+    touchLeft = false;
+    touchRight = false;
+});
 
-for(let i=0;i<100;i++){
+// particles
+let particles = [];
 
-    let move = Math.random()*140 - 70;
-    lastX += move;
-
-    if(lastX < 20) lastX = 20;
-    if(lastX > 300) lastX = 300;
-
-    let type = "normal";
-
-    if(Math.random() < 0.15) type = "break";   // ломается
-    if(Math.random() < 0.08) type = "bonus";   // супер прыжок
-
-    platforms.push({
-        x:lastX,
-        y:650 - i*140,
-        w:80,
-        h:20,
-        touched:false,
-        number:i+1,
-        type:type
-    });
-}
-
-platforms[0].type = "normal";
-
-let cameraY = 0;
-
-// частицы
 function spawnParticles(x,y){
     for(let i=0;i<6;i++){
         particles.push({
@@ -117,57 +104,84 @@ function updateParticles(){
         p.y += p.vy;
         p.life--;
     });
-
     particles = particles.filter(p=>p.life>0);
 }
 
+// platforms
+const platforms = [];
+
+let lastX = 160;
+
+for(let i=0;i<100;i++){
+
+    let move = Math.random()*140 - 70;
+    lastX += move;
+
+    if(lastX < 20) lastX = 20;
+    if(lastX > 300) lastX = 300;
+
+    let type = "normal";
+    if(Math.random() < 0.15) type = "break";
+    if(Math.random() < 0.08) type = "bonus";
+
+    platforms.push({
+        x:lastX,
+        y:650 - i*140,
+        w:80,
+        h:20,
+        number:i+1,
+        touched:false,
+        type:type
+    });
+}
+
+platforms[0].type = "normal";
+
+let cameraY = 0;
+
+// update
 function update(){
 
     if(gameWon) return;
 
-    if(keys["ArrowLeft"]) player.x -= 6;
-    if(keys["ArrowRight"]) player.x += 6;
+    if(keys["ArrowLeft"] || touchLeft){
+        player.x -= 6;
+    }
 
-    // телепорт
+    if(keys["ArrowRight"] || touchRight){
+        player.x += 6;
+    }
+
+    // wrap
     if(player.x > canvas.width) player.x = -player.w;
     if(player.x + player.w < 0) player.x = canvas.width;
 
+    // physics
     player.vy += gravity;
     player.y += player.vy;
 
     for(const p of platforms){
 
-        if(
+        const hit =
             player.vy > 0 &&
             player.x < p.x + p.w &&
             player.x + player.w > p.x &&
             player.y + player.h > p.y &&
-            player.y + player.h < p.y + p.h
-        ){
+            player.y + player.h < p.y + p.h;
 
-            // эффект
+        if(hit){
+
             spawnParticles(p.x, p.y);
 
-            // прыжок
-            if(p.type === "bonus"){
-                player.vy = bonusJump;
-            }else{
-                player.vy = jumpPower;
-            }
+            if(p.type === "bonus") player.vy = bonusJump;
+            else player.vy = jumpPower;
 
-            // ломаемая платформа
-            if(p.type === "break"){
-                p.y = 9999; // убираем
-            }
+            if(p.type === "break") p.y = 9999;
 
             if(!p.touched){
                 p.touched = true;
-                if(p.number > currentStep){
-                    currentStep = p.number;
-                }
-                if(currentStep >= 100){
-                    gameWon = true;
-                }
+                if(p.number > currentStep) currentStep = p.number;
+                if(currentStep >= 100) gameWon = true;
             }
         }
     }
@@ -179,70 +193,61 @@ function update(){
     updateParticles();
 }
 
+// draw
 function draw(){
 
     if(bg.complete && bg.naturalWidth){
         ctx.drawImage(bg,0,0,canvas.width,canvas.height);
-    } else {
-        ctx.fillStyle = "#111";
+    }else{
+        ctx.fillStyle="#111";
         ctx.fillRect(0,0,canvas.width,canvas.height);
     }
 
-    // платформы
     for(const p of platforms){
 
-        const sy = p.y - cameraY;
+        const y = p.y - cameraY;
+        if(y < -100 || y > canvas.height+100) continue;
 
-        if(sy < -100 || sy > canvas.height + 100) continue;
+        if(p.type==="break") ctx.fillStyle="#ff5555";
+        else if(p.type==="bonus") ctx.fillStyle="#ffd700";
+        else ctx.fillStyle="lime";
 
-        if(p.type === "break"){
-            ctx.fillStyle = "#ff5555";
-        } else if(p.type === "bonus"){
-            ctx.fillStyle = "#ffd700";
-        } else {
-            ctx.fillStyle = "lime";
-        }
-
-        ctx.fillRect(p.x, sy, p.w, p.h);
+        ctx.fillRect(p.x,y,p.w,p.h);
     }
 
-    // частицы
     particles.forEach(p=>{
-        ctx.fillStyle = "white";
-        ctx.fillRect(p.x, p.y - cameraY, 3, 3);
+        ctx.fillStyle="white";
+        ctx.fillRect(p.x,p.y-cameraY,3,3);
     });
 
-    // игрок
     const py = player.y - cameraY;
 
-    if(playerImg.complete && playerImg.naturalWidth){
-        ctx.drawImage(playerImg, player.x, py, player.w, player.h);
-    } else {
-        ctx.fillStyle = "white";
-        ctx.fillRect(player.x, py, player.w, player.h);
+    if(playerImg.complete){
+        ctx.drawImage(playerImg,player.x,py,player.w,player.h);
+    }else{
+        ctx.fillStyle="white";
+        ctx.fillRect(player.x,py,player.w,player.h);
     }
 
-    // UI
-    ctx.fillStyle = "white";
-    ctx.font = "24px Fredoka";
-    ctx.fillText(`Escalón: ${currentStep}/100`, 10, 35);
+    ctx.fillStyle="white";
+    ctx.font="24px Fredoka";
+    ctx.fillText(`Escalón: ${currentStep}/100`,10,35);
 
-    // победа
     if(gameWon){
 
-        ctx.fillStyle = "rgba(0,0,0,0.85)";
+        ctx.fillStyle="rgba(0,0,0,0.85)";
         ctx.fillRect(0,0,canvas.width,canvas.height);
 
-        ctx.textAlign = "center";
-        ctx.fillStyle = "#ff77aa";
-        ctx.font = "42px Fredoka";
+        ctx.textAlign="center";
+        ctx.fillStyle="#ff77aa";
+        ctx.font="42px Fredoka";
 
-        ctx.fillText("Sos la mejor princesa", 200, 300);
-        ctx.fillText("❤️", 200, 360);
+        ctx.fillText("Sos la mejor princesa",200,300);
+        ctx.fillText("❤️",200,360);
 
-        ctx.fillStyle = "white";
-        ctx.font = "24px Fredoka";
-        ctx.fillText("¡Felicitaciones!", 200, 430);
+        ctx.fillStyle="white";
+        ctx.font="24px Fredoka";
+        ctx.fillText("¡Felicitaciones!",200,430);
     }
 }
 
